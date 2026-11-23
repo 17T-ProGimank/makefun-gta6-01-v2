@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOLMARA — Open-World Crime Game</title>
+<style>
+  :root { --ember: #ff7a1a; --ember2: #ffb347; --dark: #14100c; --panel: rgba(16,12,8,.78); --gold: #ffd27a; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1208; font-family: 'Segoe UI', Arial, sans-serif; color: #fff; }
+  #app, #app canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #vignette { position: fixed; inset: 0; pointer-events: none; z-index: 3;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(20,8,0,.55) 100%); }
+  #damage-flash { position: fixed; inset: 0; pointer-events: none; z-index: 4; opacity: 0;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(255,0,0,.55) 100%); transition: opacity .15s; }
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; display: none; }
+  #hud.on { display: block; }
+  .box { position: absolute; background: var(--panel); border: 1px solid rgba(255,178,71,.35); border-radius: 8px; padding: 8px 12px; }
+  #money-box { top: 14px; left: 14px; font-size: 22px; font-weight: 800; color: var(--gold); }
+  #money-box small { display: block; font-size: 10px; letter-spacing: 2px; color: #ffb347; }
+  #wanted-box { top: 14px; right: 14px; text-align: right; }
+  #wanted-label { font-size: 10px; letter-spacing: 2px; color: #9fb6ff; }
+  #stars span { font-size: 22px; color: #555; margin-left: 2px; }
+  #stars span.lit { color: #ffd23c; text-shadow: 0 0 8px #ff9a3c; }
+  #time { position: absolute; top: 76px; left: 50%; transform: translateX(-50%); font-size: 15px; font-weight: 700; color: #ffe9c4; background: var(--panel); padding: 4px 14px; border-radius: 20px; border: 1px solid rgba(255,178,71,.35); }
+  #respect-bar { position: absolute; top: 112px; left: 50%; transform: translateX(-50%); width: 260px; height: 10px; background: rgba(0,0,0,.6); border: 1px solid rgba(255,178,71,.4); border-radius: 6px; overflow: hidden; }
+  #respect-bar i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg, #ff7a1a, #ffd23c); transition: width .4s ease; }
+  #respect-label { position: absolute; top: 126px; left: 50%; transform: translateX(-50%); font-size: 11px; letter-spacing: 1px; color: var(--gold); text-shadow: 0 1px 2px #000; }
+  #objective-box { top: 150px; left: 14px; max-width: 340px; }
+  #mission-label { font-size: 11px; letter-spacing: 2px; color: var(--ember2); font-weight: 700; }
+  #objective { font-size: 15px; margin-top: 2px; }
+  #hint { position: absolute; top: 240px; left: 14px; font-size: 13px; color: #ffe9c4; background: var(--panel); padding: 6px 12px; border-radius: 6px; display: none; }
+  #minimap { position: absolute; right: 14px; bottom: 14px; width: 180px; height: 180px; border-radius: 50%; border: 3px solid rgba(255,178,71,.6); background: #0d1a24; box-shadow: 0 0 20px rgba(0,0,0,.6); }
+  #crew-box { position: absolute; right: 14px; bottom: 204px; font-size: 13px; color: #ffe9c4; }
+  #radio-box { position: absolute; left: 14px; bottom: 14px; font-size: 13px; color: #ffe9c4; }
+  #radio-station { font-weight: 800; color: var(--ember2); }
+  #health-box { position: absolute; left: 14px; bottom: 64px; width: 220px; }
+  #health-bar { height: 12px; background: rgba(0,0,0,.6); border-radius: 6px; overflow: hidden; border: 1px solid rgba(255,255,255,.25); }
+  #health-fill { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #37d67a, #9be15d); }
+  #speed-box { position: absolute; right: 210px; bottom: 14px; font-size: 30px; font-weight: 800; color: #fff; text-shadow: 0 2px 6px #000; }
+  #speed-box small { font-size: 12px; color: var(--ember2); }
+  #garage-hint { position: absolute; left: 50%; bottom: 90px; transform: translateX(-50%); font-size: 15px; font-weight: 700; color: #ffd23c; background: var(--panel); padding: 8px 16px; border-radius: 8px; border: 1px solid var(--ember); display: none; }
+  #banner { position: absolute; top: 32%; left: 50%; transform: translateX(-50%); text-align: center; display: none; text-shadow: 0 3px 12px #000; }
+  #banner-title { font-size: 44px; font-weight: 900; letter-spacing: 3px; color: var(--gold); }
+  #banner-sub { font-size: 18px; color: #fff; margin-top: 6px; }
+  .menu { position: fixed; inset: 0; z-index: 10; display: none; align-items: center; justify-content: center; flex-direction: column; text-align: center; background: linear-gradient(180deg, rgba(40,16,0,.82), rgba(10,6,2,.92)); }
+  .menu.on { display: flex; }
+  .menu h1 { font-size: 72px; letter-spacing: 10px; color: var(--ember); text-shadow: 0 0 30px rgba(255,122,26,.7); }
+  .menu h2 { font-size: 20px; letter-spacing: 4px; color: var(--gold); margin: 6px 0 14px; }
+  .menu p.tagline { color: #ffe9c4; max-width: 560px; margin-bottom: 18px; }
+  .controls { font-size: 14px; color: #ddd; line-height: 1.9; margin-bottom: 20px; }
+  .controls b { color: var(--ember2); }
+  .menu button { pointer-events: auto; cursor: pointer; font-size: 16px; font-weight: 800; letter-spacing: 2px; color: #1a1208; background: linear-gradient(180deg, #ffb347, #ff7a1a); border: none; border-radius: 8px; padding: 12px 28px; margin: 5px; }
+  .menu button:hover { filter: brightness(1.15); }
+  .menu button.ghost { background: transparent; color: #ffd27a; border: 1px solid #ff7a1a; }
+  .slots { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; justify-content: center; }
+  .slots button { font-size: 13px; padding: 10px 14px; }
+  .list { text-align: left; background: var(--panel); border: 1px solid rgba(255,178,71,.35); border-radius: 8px; padding: 14px 18px; min-width: 420px; max-width: 90vw; margin-bottom: 14px; font-size: 14px; line-height: 1.8; }
+  #pause-stats { color: #ffe9c4; font-size: 14px; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="vignette"></div>
+<div id="damage-flash"></div>
+
+<div id="hud">
+  <div id="money-box" class="box"><small>SOLMARA BANK</small>$<span id="money">500</span></div>
+  <div id="wanted-box" class="box"><div id="wanted-label">SMPD — CLEAN</div><div id="stars"><span>★</span><span>★</span><span>★</span><span>★</span><span>★</span></div></div>
+  <div id="time">DAY 1 · 18:00</div>
+  <div id="respect-bar"><i></i></div>
+  <div id="respect-label">NOBODY · 0/100</div>
+  <div id="objective-box" class="box"><div id="mission-label">MISSION 1 — FIRST GEAR</div><div id="objective">Drive to the Ember Garage and meet Mara.</div></div>
+  <div id="hint"></div>
+  <canvas id="minimap" width="180" height="180"></canvas>
+  <div id="crew-box" class="box">CREW: Mara</div>
+  <div id="radio-box" class="box">📻 <span id="radio-station">RADIO OFF — press R</span></div>
+  <div id="health-box" class="box"><div id="health-bar"><span id="health-fill"></span></div></div>
+  <div id="speed-box"><span id="speed">0</span> <small>MPH</small></div>
+  <div id="garage-hint">GARAGE — press G</div>
+  <div id="banner"><div id="banner-title"></div><div id="banner-sub"></div></div>
+</div>
+
+<div id="menu-start" class="menu on">
+  <h1>SOLMARA</h1>
+  <h2>OPEN-WORLD CRIME GAME</h2>
+  <p class="tagline">Dante Reyes owes a debt. Mara Voss has the jobs to pay it off — and a plan to take down Silas Rook and the Vultures. Twelve missions. One island. Golden hour, every hour.</p>
+  <div class="controls">
+    <b>W A S D</b> drive / walk &nbsp;·&nbsp; <b>Shift</b> run &nbsp;·&nbsp; <b>Space</b> jump &nbsp;·&nbsp; <b>E</b> enter / exit car<br>
+    <b>F / Click</b> shoot &nbsp;·&nbsp; <b>R</b> radio &nbsp;·&nbsp; <b>G</b> garage (near Ember Garage) &nbsp;·&nbsp; <b>C</b> crew &nbsp;·&nbsp; <b>Esc</b> pause
+  </div>
+  <div class="slots">
+    <button id="slot-1">SLOT 1 — EMPTY</button>
+    <button id="slot-2">SLOT 2 — EMPTY</button>
+    <button id="slot-3">SLOT 3 — EMPTY</button>
+  </div>
+  <div><button id="btn-start">▶ START</button></div>
+</div>
+
+<div id="menu-pause" class="menu">
+  <h1 style="font-size:44px">PAUSED</h1>
+  <p id="pause-stats">Missions 0/12 · Kills 0 · Cars stolen 0 · Rank NOBODY</p>
+  <div><button id="btn-resume">RESUME</button></div>
+  <div><button id="btn-garage">GARAGE</button> <button id="btn-crew">CREW</button></div>
+  <div>
+    <button id="btn-save-1" class="ghost">SAVE TO SLOT 1</button>
+    <button id="btn-save-2" class="ghost">SAVE TO SLOT 2</button>
+    <button id="btn-save-3" class="ghost">SAVE TO SLOT 3</button>
+  </div>
+  <div><button id="btn-restart" class="ghost">RESTART DAY</button> <button id="btn-menu" class="ghost">MENU</button></div>
+</div>
+
+<div id="menu-gameover" class="menu">
+  <h1 style="font-size:56px">BUSTED</h1>
+  <h2>THE SMPD GOT YOU, DANTE</h2>
+  <div><button id="btn-retry">RETRY</button> <button id="btn-over-menu" class="ghost">MENU</button></div>
+</div>
+
+<div id="menu-garage" class="menu">
+  <h1 style="font-size:40px">EMBER GARAGE</h1>
+  <h2>YOUR CARS · REPAIR · PAINT · UPGRADES</h2>
+  <div id="garage-list" class="list">No cars stored yet — steal a car and store it here.</div>
+  <div>
+    <button id="btn-garage-repair">REPAIR $150</button>
+    <button id="btn-garage-paint">PAINT $200</button>
+    <button id="btn-garage-upgrade">UPGRADE</button>
+    <button id="btn-garage-store">STORE CURRENT CAR</button>
+  </div>
+  <div><button id="btn-garage-close" class="ghost">CLOSE</button></div>
+</div>
+
+<div id="menu-crew" class="menu">
+  <h1 style="font-size:40px">CREW</h1>
+  <h2>MARA'S PEOPLE</h2>
+  <div id="crew-list" class="list">Mara Voss — Fixer — +10% mission payout</div>
+  <div><button id="btn-crew-close" class="ghost">CLOSE</button></div>
+</div>
+
+<script src="./vendor/three.min.js"></script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
